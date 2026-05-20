@@ -228,9 +228,11 @@ textarea.inp{resize:vertical;min-height:76px;line-height:1.6}
   <h1>Barra Studio Criativo</h1>
   <p>Portfólio de projetos — acesso restrito</p>
   <form id="auth-form">
-    <label class="lbl" for="pw">Senha de acesso</label>
+    <label class="lbl" for="email">E-mail do admin</label>
+    <input id="email" class="inp" type="email" placeholder="admin@exemplo.com" autocomplete="username"/>
+    <label class="lbl" for="pw" style="margin-top:12px">Senha</label>
     <input id="pw" class="inp" type="password" placeholder="••••••••" autocomplete="current-password"/>
-    <p id="auth-err" class="auth-err">Senha incorreta.</p>
+    <p id="auth-err" class="auth-err">Não foi possível entrar. Confira e-mail, senha e permissões do usuário.</p>
     <button type="submit" class="btn-a">Entrar →</button>
   </form>
 </div>
@@ -346,49 +348,175 @@ textarea.inp{resize:vertical;min-height:76px;line-height:1.6}
 <!-- TOAST -->
 <div id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
 <script>
 // ── CONFIG ──────────────────────────────────────────────
 const CFG = {
   name:"Barra Studio Criativo",short:"BR",
-  password:"barra2026",
-  db:"barra_portfolio_v1",sessKey:"sess_barra_portfolio_v1",
   hasBA:true,baLabelA:"Antes",baLabelB:"Depois",
   cardFields:["tipo", "status", "area", "localizacao"],
 };
 const FIELDS = [{"id": "tipo", "label": "Tipo de projeto", "type": "select", "card": true, "opts": ["Residencial", "Comercial", "Restaurante", "Saúde", "Corporativo", "Interiores", "Reforma", "Área de lazer"]}, {"id": "status", "label": "Status", "type": "select", "card": true, "opts": ["Concluído", "Em execução", "Projeto / Conceito", "Em aprovação"]}, {"id": "area", "label": "Área total", "type": "text", "card": true, "ph": "Ex: 240 m²"}, {"id": "localizacao", "label": "Localização", "type": "text", "card": true, "ph": "Ex: São José do Rio Preto, SP"}, {"id": "ano", "label": "Ano", "type": "text", "card": false, "ph": "Ex: 2025"}, {"id": "cliente_tipo", "label": "Perfil do cliente", "type": "text", "card": false, "ph": "Ex: Família, loja, restaurante, clínica"}, {"id": "o_que_foi_feito", "label": "O que foi feito", "type": "textarea", "card": false, "ph": "Descreva o escopo: arquitetura, interiores, reforma, fachada, layout, 3D..."}, {"id": "caracteristicas", "label": "Conceito e características", "type": "textarea", "card": false, "ph": "Conceito criativo, soluções funcionais, experiência do espaço e diferenciais."}, {"id": "materiais", "label": "Materiais e acabamentos", "type": "text", "card": false, "ph": "Ex: madeira, cimento queimado, vidro, marcenaria, iluminação"}, {"id": "programa", "label": "Programa de necessidades", "type": "text", "card": false, "ph": "Ex: área gourmet, salão, cozinha, balcão, vitrine, suíte"}, {"id": "desafios", "label": "Desafios / Soluções", "type": "textarea", "card": false, "ph": "Principais desafios do projeto e como foram resolvidos."}, {"id": "equipe", "label": "Equipe", "type": "text", "card": false, "ph": "Ex: Rafaela Braz, Thaís Toneto"}];
+const SUPABASE_CFG = window.BARRA_SUPABASE || {};
+const supabaseClient = (!SUPABASE_CFG.url || !SUPABASE_CFG.anonKey || SUPABASE_CFG.url.includes("SEU-PROJETO") || SUPABASE_CFG.anonKey.includes("SUA_SUPABASE"))
+  ? null
+  : window.supabase.createClient(SUPABASE_CFG.url, SUPABASE_CFG.anonKey);
+const IMAGE_BUCKET = SUPABASE_CFG.imageBucket || "project-images";
 // ────────────────────────────────────────────────────────
 
-// ── IDB ─────────────────────────────────────────────────
+// ── SUPABASE DATA ────────────────────────────────────────
 let db;
-function openDB(){
-  return new Promise((res,rej)=>{
-    const r=indexedDB.open(CFG.db,1);
-    r.onupgradeneeded=e=>{
-      const d=e.target.result;
-      if(!d.objectStoreNames.contains("works"))
-        d.createObjectStore("works",{keyPath:"id",autoIncrement:true});
-    };
-    r.onsuccess=e=>{db=e.target.result;res(db)};
-    r.onerror=()=>rej(r.error);
-  });
+async function openDB(){
+  if(!supabaseClient)throw new Error("Supabase não configurado. Edite supabase-config.js.");
+  return supabaseClient;
 }
-const tx=(mode="readonly")=>db.transaction("works",mode).objectStore("works");
-function dbAll(){return new Promise((r,j)=>{const q=tx().getAll();q.onsuccess=()=>r(q.result);q.onerror=()=>j()})}
-function dbPut(w){return new Promise((r,j)=>{const q=tx("readwrite").put(w);q.onsuccess=()=>r(q.result);q.onerror=()=>j()})}
-function dbDel(id){return new Promise((r,j)=>{const q=tx("readwrite").delete(id);q.onsuccess=()=>r();q.onerror=()=>j()})}
+async function dbAll(){
+  const {data,error}=await supabaseClient
+    .from("projects")
+    .select("*")
+    .order("display_order",{ascending:true})
+    .order("created_at",{ascending:false});
+  if(error)throw error;
+  return (data||[]).map(rowToWork);
+}
+async function dbPut(w){
+  const savedImages=await uploadWorkImages(w);
+  const row=workToRow({...w,...savedImages});
+  const query=w.id
+    ? supabaseClient.from("projects").update(row).eq("id",w.id).select().single()
+    : supabaseClient.from("projects").insert(row).select().single();
+  const {data,error}=await query;
+  if(error)throw error;
+  const saved=rowToWork(data);
+  Object.assign(w,saved);
+  return saved.id;
+}
+async function dbDel(id){
+  const {error}=await supabaseClient.from("projects").delete().eq("id",id);
+  if(error)throw error;
+}
+function rowToWork(p){
+  const gallery=Array.isArray(p.gallery_images)?p.gallery_images:[];
+  const photos=gallery.length?gallery.filter(Boolean):[p.cover_image_url].filter(Boolean);
+  return {
+    id:p.id,
+    slug:p.slug,
+    title:p.title||"",
+    category:p.category||"",
+    featured:!!p.is_featured,
+    publicationStatus:p.status||"draft",
+    displayOrder:Number(p.display_order||0),
+    photos,
+    beforePhoto:p.before_image_url||null,
+    afterPhoto:p.after_image_url||null,
+    videos:Array.isArray(p.youtube_videos)?p.youtube_videos:[],
+    data:{
+      tipo:p.project_type||"",
+      status:p.project_status||"",
+      area:p.total_area||"",
+      localizacao:p.location||"",
+      ano:p.year||"",
+      cliente_tipo:p.client_profile||"",
+      o_que_foi_feito:p.scope||"",
+      caracteristicas:p.concept||"",
+      materiais:p.materials||"",
+      programa:p.needs_program||"",
+      desafios:p.challenges_solutions||"",
+      equipe:p.team||"",
+    },
+    createdAt:p.created_at,
+    updatedAt:p.updated_at,
+  };
+}
+function workToRow(w){
+  const data=w.data||{};
+  const photos=(w.photos||[]).filter(Boolean);
+  return {
+    title:w.title,
+    slug:w.slug||`${slugify(w.title)}${w.id?"":"-"+Date.now().toString(36)}`,
+    category:w.category||null,
+    project_type:data.tipo||null,
+    project_status:data.status||null,
+    status:w.publicationStatus||"draft",
+    is_featured:!!w.featured,
+    total_area:data.area||null,
+    location:data.localizacao||null,
+    year:data.ano||null,
+    client_profile:data.cliente_tipo||null,
+    scope:data.o_que_foi_feito||null,
+    concept:data.caracteristicas||null,
+    materials:data.materiais||null,
+    needs_program:data.programa||null,
+    challenges_solutions:data.desafios||null,
+    team:data.equipe||null,
+    cover_image_url:photos[0]||null,
+    gallery_images:photos,
+    before_image_url:w.beforePhoto||null,
+    after_image_url:w.afterPhoto||null,
+    youtube_videos:w.videos||[],
+    display_order:Number(w.displayOrder||0),
+  };
+}
+function slugify(text){
+  return String(text||"projeto")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+    .toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,"")
+    .slice(0,80) || "projeto";
+}
+async function uploadWorkImages(w){
+  return {
+    photos:await uploadImageList(w.photos||[],w.id||slugify(w.title)),
+    beforePhoto:await uploadMaybeImage(w.beforePhoto,w.id||slugify(w.title),"antes"),
+    afterPhoto:await uploadMaybeImage(w.afterPhoto,w.id||slugify(w.title),"depois"),
+  };
+}
+async function uploadImageList(items,folder){
+  const urls=[];
+  for(let i=0;i<items.length;i++){
+    const url=await uploadMaybeImage(items[i],folder,`galeria-${i+1}`);
+    if(url)urls.push(url);
+  }
+  return urls;
+}
+async function uploadMaybeImage(value,folder,name){
+  if(!value)return null;
+  if(!String(value).startsWith("data:"))return value;
+  const blob=dataUrlToBlob(value);
+  const ext=blob.type.includes("png")?"png":"jpg";
+  const path=`projects/${folder}/${Date.now()}-${name}.${ext}`;
+  const {error}=await supabaseClient.storage.from(IMAGE_BUCKET).upload(path,blob,{contentType:blob.type,upsert:false});
+  if(error)throw error;
+  const {data}=supabaseClient.storage.from(IMAGE_BUCKET).getPublicUrl(path);
+  return data.publicUrl;
+}
+function dataUrlToBlob(dataUrl){
+  const [head,body]=dataUrl.split(",");
+  const type=(head.match(/data:(.*?);/)||[])[1]||"image/jpeg";
+  const bin=atob(body);
+  const arr=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);
+  return new Blob([arr],{type});
+}
+function sortWorks(){
+  works.sort((a,b)=>(Number(a.displayOrder||0)-Number(b.displayOrder||0)) || (new Date(b.createdAt)-new Date(a.createdAt)));
+}
 
 // ── AUTH ─────────────────────────────────────────────────
-document.getElementById("auth-form").addEventListener("submit",e=>{
+document.getElementById("auth-form").addEventListener("submit",async e=>{
   e.preventDefault();
-  if(document.getElementById("pw").value===CFG.password){
-    sessionStorage.setItem(CFG.sessKey,"1");bootApp();
-  } else {
-    const inp=document.getElementById("pw"),err=document.getElementById("auth-err");
-    inp.classList.add("err");err.classList.add("on");inp.value="";inp.focus();
-    setTimeout(()=>{inp.classList.remove("err");err.classList.remove("on")},3e3);
+  const email=document.getElementById("email");
+  const inp=document.getElementById("pw"),err=document.getElementById("auth-err");
+  if(!supabaseClient){
+    err.textContent="Configure SUPABASE_URL e SUPABASE_ANON_KEY em supabase-config.js.";
+    err.classList.add("on");return;
   }
+  const {error}=await supabaseClient.auth.signInWithPassword({email:email.value.trim(),password:inp.value});
+  if(!error){bootApp();return}
+  inp.classList.add("err");email.classList.add("err");err.classList.add("on");inp.value="";inp.focus();
+  setTimeout(()=>{inp.classList.remove("err");email.classList.remove("err");err.classList.remove("on")},4e3);
 });
-function logout(){sessionStorage.removeItem(CFG.sessKey);location.reload()}
+async function logout(){if(supabaseClient)await supabaseClient.auth.signOut();location.reload()}
 
 // ── STATE ─────────────────────────────────────────────────
 let works=[],curFilter="all",curEdit=null,curDetail=null;
@@ -399,12 +527,21 @@ let dmCurIdx=0,dmShowBA=false,dmImages=[];
 async function bootApp(){
   document.getElementById("scr-auth").style.display="none";
   document.getElementById("scr-app").style.display="flex";
-  await openDB();
-  works=await dbAll();
-  works.sort((a,b)=>b.id-a.id);
-  renderToolbar();renderGrid();
+  try{
+    await openDB();
+    works=await dbAll();
+    sortWorks();
+    renderToolbar();renderGrid();
+  }catch(err){
+    console.error("[Barra CMS]",err);
+    toast(err.message||"Erro ao carregar projetos");
+  }
 }
-window.addEventListener("load",()=>{if(sessionStorage.getItem(CFG.sessKey)==="1")bootApp()});
+window.addEventListener("load",async()=>{
+  if(!supabaseClient)return;
+  const {data}=await supabaseClient.auth.getSession();
+  if(data.session)bootApp();
+});
 
 // ── TOOLBAR ───────────────────────────────────────────────
 function renderToolbar(){
@@ -463,6 +600,7 @@ function cardHTML(w){
     ${cnt>1?`<span class="badge-count"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>${cnt}</span>`:""}
     ${hasBoth&&!cnt?`<span class="badge-ba">A/D</span>`:""}
     ${w.featured?`<span class="badge-feat">⭐</span>`:""}
+    ${w.publicationStatus==="draft"?`<span class="badge-count" style="left:10px;right:auto">Rascunho</span>`:""}
   </div>
   <div class="card-body">
     <div class="card-title">${w.title||"Sem título"}</div>
@@ -538,6 +676,19 @@ function buildFormBody(){
 <div class="fg">
   <label class="lbl">Título do projeto *</label>
   <input id="f-title" class="inp" type="text" value="${w?escH(w.title||""):""}"/>
+</div>
+<div class="f2">
+  <div class="fg">
+    <label class="lbl">Publicação</label>
+    <select id="f-publication-status" class="inp">
+      <option value="published"${!w||w.publicationStatus==="published"?' selected':''}>Publicado</option>
+      <option value="draft"${w&&w.publicationStatus==="draft"?' selected':''}>Rascunho</option>
+    </select>
+  </div>
+  <div class="fg">
+    <label class="lbl">Ordem de exibição</label>
+    <input id="f-display-order" class="inp" type="number" value="${w?Number(w.displayOrder||0):0}" placeholder="0"/>
+  </div>
 </div>
 <div class="f2">
   <div class="fg">
@@ -680,20 +831,28 @@ async function saveWork(){
   const work={
     ...(curEdit||{}),
     title,category:cat,featured:feat,
+    publicationStatus:document.getElementById("f-publication-status").value,
+    displayOrder:Number(document.getElementById("f-display-order").value||0),
     photos:fPhotos,beforePhoto:fBefore,afterPhoto:fAfter,
     videos:collectVideos(),
     data,
     createdAt:(curEdit?curEdit.createdAt:new Date().toISOString()),
     updatedAt:new Date().toISOString(),
   };
-  const id=await dbPut(work);
-  if(!curEdit)work.id=id;
-  const idx=works.findIndex(w=>w.id===work.id);
-  if(idx>=0)works[idx]=work; else works.unshift(work);
-  works.sort((a,b)=>b.id-a.id);
-  renderToolbar();renderGrid();
-  closeFm();btn.disabled=false;btn.textContent="Publicar projeto →";
-  toast(curEdit?"Projeto atualizado!":"Projeto publicado!");
+  try{
+    const id=await dbPut(work);
+    if(!curEdit)work.id=id;
+    const idx=works.findIndex(w=>w.id===work.id);
+    if(idx>=0)works[idx]=work; else works.unshift(work);
+    sortWorks();
+    renderToolbar();renderGrid();
+    closeFm();toast(curEdit?"Projeto atualizado!":"Projeto publicado!");
+  }catch(err){
+    console.error("[Barra CMS] Erro ao salvar:",err);
+    toast(err.message||"Erro ao salvar projeto");
+  }finally{
+    btn.disabled=false;btn.textContent="Publicar projeto →";
+  }
 }
 
 // ── DETAIL ────────────────────────────────────────────────

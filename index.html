@@ -39,6 +39,8 @@
 <footer class="footer"><div class="container footgrid"><div class="footbrand">Barra Studio Criativo</div><div class="footlinks"><a class="social-icon" href="https://www.instagram.com/studiocriativo.barra/" target="_blank" aria-label="Instagram"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.8"/><circle cx="17.5" cy="6.5" r="1.2" fill="currentColor"/></svg></a><a class="social-icon" href="https://wa.me/5517997573824" target="_blank" aria-label="WhatsApp"><img src="assets/whatsapp.png" alt=""></a></div></div></footer>
 <a class="float-wa" href="https://wa.me/5517997573824" target="_blank" aria-label="Fale pelo WhatsApp"><img src="assets/whatsapp.png" alt="WhatsApp"></a>
 <div class="modal" id="modal"><div class="modal-card"><button class="modal-close" onclick="closeModal()">×</button><div class="modal-grid"><div class="modal-media"><img class="modal-img" id="modalImg"><div class="modal-thumbs" id="modalThumbs"></div><div class="ba-modal" id="modalBA"></div></div><div class="modal-body"><div class="eyebrow" id="modalMeta"></div><h3 id="modalTitle"></h3><p id="modalDesc"></p><div class="project-tags" id="modalTags"></div><div class="project-info" id="modalInfo"></div><div id="modalSections"></div><div class="video-grid" id="modalVideos"></div><a class="btn dark" id="modalWa" href="https://wa.me/5517997573824" target="_blank">Conversar sobre projeto</a></div></div></div></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
 <script>
 function easeOutCubic(t){return 1-Math.pow(1-t,3)}
 function smoothTo(target){const start=window.pageYOffset;const top=Math.max(0,target.getBoundingClientRect().top+start-86);const distance=top-start;const duration=760;let startTime=null;function step(ts){if(!startTime)startTime=ts;const p=Math.min((ts-startTime)/duration,1);window.scrollTo(0,start+distance*easeOutCubic(p));if(p<1)requestAnimationFrame(step)}requestAnimationFrame(step)}
@@ -49,23 +51,13 @@ function moveMenuCursor(el,visible=true){if(!menuEl||!menuCursor||!el)return;men
 menuEl?.querySelectorAll('a').forEach(a=>{a.addEventListener('mouseenter',()=>moveMenuCursor(a));a.addEventListener('focus',()=>moveMenuCursor(a));a.addEventListener('click',()=>moveMenuCursor(a));});
 menuEl?.addEventListener('mouseleave',()=>{if(menuCursor)menuCursor.style.opacity='0'});
 const SEED_PROJECTS=[{"title": "Chácara AD.", "year": "2023", "category": "Residencial", "type": "Área de lazer", "cover": "assets/barra-page-12.jpg", "desc": "Projeto residencial com foco em convivência, lazer e integração entre áreas externas e internas."}, {"title": "Casa JG.", "year": "2024", "category": "Residencial", "type": "Casa e interiores", "cover": "assets/barra-page-13.jpg", "desc": "Projeto residencial com linguagem contemporânea, ambientes integrados e atenção aos detalhes de interiores."}, {"title": "Casa JG. — Interiores", "year": "2024", "category": "Residencial", "type": "Interiores", "cover": "assets/barra-page-14.jpg", "desc": "Desenvolvimento de interiores com acabamentos, marcenaria e soluções para conforto no cotidiano."}, {"title": "Apartamento JF.", "year": "2025", "category": "Comercial", "type": "Restaurante", "cover": "assets/barra-page-15.jpg", "desc": "Projeto de ambiente comercial voltado à experiência, circulação e identidade visual do espaço."}, {"title": "Apartamento JF.", "year": "2025", "category": "Residencial", "type": "Apartamento", "cover": "assets/barra-page-16.jpg", "desc": "Projeto de interiores para apartamento com aproveitamento inteligente do espaço e estética acolhedora."}, {"title": "Rancho do Pastel", "year": "2025", "category": "Restaurantes", "type": "Comercial gastronômico", "cover": "assets/barra-page-17.jpg", "desc": "Ambiente gastronômico com presença visual marcante, pensado para acolhimento, operação e experiência."}, {"title": "Samri Moda Fitness", "year": "2025", "category": "Comercial", "type": "Loja", "cover": "assets/barra-page-18.jpg", "desc": "Projeto comercial para varejo de moda fitness com identidade forte, exposição de produtos e circulação fluida."}];
-const DB_NAME='barra_portfolio_v1';
-const STORE='works';
 let allProjects=[],activeFilter='Todos';
-function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open(DB_NAME,1);r.onupgradeneeded=e=>{const d=e.target.result;if(!d.objectStoreNames.contains(STORE))d.createObjectStore(STORE,{keyPath:'id',autoIncrement:true})};r.onsuccess=e=>res(e.target.result);r.onerror=()=>rej(r.error)})}
-async function loadCmsProjects(){try{const db=await openDB();return await new Promise((res)=>{const q=db.transaction(STORE).objectStore(STORE).getAll();q.onsuccess=()=>res(q.result||[]);q.onerror=()=>res([])})}catch(e){return []}}
-function normalizeCms(w){
-  const d=w.data||{};
-  const photos=(w.photos&&w.photos.length?w.photos:[]);
-  const cover=photos[0]||w.beforePhoto||'assets/barra-page-11.jpg';
-  return {
-    source:'cms',raw:w,title:w.title||'Projeto sem título',year:d.ano||'',category:w.category||(d.tipo||'Projeto'),type:d.tipo||'',status:d.status||'',area:d.area||'',localizacao:d.localizacao||'',cliente_tipo:d.cliente_tipo||'',cover,photos,beforePhoto:w.beforePhoto||'',afterPhoto:w.afterPhoto||'',videos:w.videos||[],
-    desc:d.o_que_foi_feito||d.caracteristicas||d.desafios||'Projeto cadastrado pelo painel do portfólio.',
-    sections:{'O que foi feito':d.o_que_foi_feito,'Conceito e características':d.caracteristicas,'Materiais e acabamentos':d.materiais,'Programa de necessidades':d.programa,'Desafios / Soluções':d.desafios,'Equipe':d.equipe}
-  }
-}
 function enrichSeed(p){return {...p,photos:[p.cover],sections:{'Descrição do projeto':p.desc},videos:[]}}
-async function init(){const cms=(await loadCmsProjects()).map(normalizeCms);allProjects=cms.length?cms:SEED_PROJECTS.map(enrichSeed);renderFilters();renderProjects()}
+async function init(){
+  const cms=(await loadSupabaseProjects()).map(normalizeSupabaseProject);
+  allProjects=cms.length?cms:SEED_PROJECTS.map(enrichSeed);
+  renderFilters();renderProjects();
+}
 function renderFilters(){const cats=['Todos',...new Set(allProjects.map(p=>p.category).filter(Boolean))];filters.innerHTML=cats.map(c=>`<button class="filter ${c===activeFilter?'on':''}" onclick="activeFilter='${c}';renderFilters();renderProjects()">${c}</button>`).join('')}
 function renderProjects(){const list=activeFilter==='Todos'?allProjects:allProjects.filter(p=>p.category===activeFilter);projectGrid.innerHTML=list.map((p,i)=>`<article class="project" onclick="openProject(${allProjects.indexOf(p)})"><img src="${p.cover}" alt="${esc(p.title)}"><div class="pbody"><div class="meta">${[p.category,p.year||'Projeto'].filter(Boolean).join(' · ')}</div><h3>${esc(p.title)}</h3><p>${esc(p.desc)}</p><div class="project-card-tags">${[p.type,p.status,p.area].filter(Boolean).slice(0,3).map(x=>`<span>${esc(x)}</span>`).join('')}</div></div></article>`).join('')}
 let modalProject=null, modalImageIndex=0;
@@ -91,6 +83,37 @@ function youtubeId(url){const m=String(url||'').match(/(?:youtube\.com\/(?:watch
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function closeModal(){modal.classList.remove('on')}
 contactForm.addEventListener('submit',e=>{e.preventDefault();const f=new FormData(contactForm);const msg=`Olá, Barra Studio Criativo. Meu nome é ${f.get('nome')}. Quero falar sobre um projeto ${f.get('tipo')}. Meu WhatsApp é ${f.get('telefone')}. Mensagem: ${f.get('mensagem')||''}`;window.open('https://wa.me/5517997573824?text='+encodeURIComponent(msg),'_blank')})
+function getSupabaseClient(){
+  const cfg=window.BARRA_SUPABASE||{};
+  if(!cfg.url||!cfg.anonKey||cfg.url.includes('SEU-PROJETO')||cfg.anonKey.includes('SUA_SUPABASE'))return null;
+  return window.supabase.createClient(cfg.url,cfg.anonKey);
+}
+async function loadSupabaseProjects(){
+  const client=getSupabaseClient();
+  if(!client)return [];
+  const {data,error}=await client
+    .from('projects')
+    .select('*')
+    .eq('status','published')
+    .order('is_featured',{ascending:false})
+    .order('display_order',{ascending:true})
+    .order('created_at',{ascending:false});
+  if(error){console.error('[Barra CMS] Erro ao carregar projetos:',error);return []}
+  return data||[];
+}
+function asArray(value){return Array.isArray(value)?value:[]}
+function normalizeSupabaseProject(p){
+  const gallery=asArray(p.gallery_images).filter(Boolean);
+  const cover=p.cover_image_url||gallery[0]||'assets/barra-page-11.jpg';
+  const photos=gallery.length?gallery:[cover];
+  return {
+    source:'supabase',raw:p,id:p.id,title:p.title||'Projeto sem título',year:p.year||'',category:p.category||'Projeto',
+    type:p.project_type||'',status:p.project_status||'',area:p.total_area||'',localizacao:p.location||'',cliente_tipo:p.client_profile||'',
+    cover,photos,beforePhoto:p.before_image_url||'',afterPhoto:p.after_image_url||'',videos:asArray(p.youtube_videos),
+    desc:p.scope||p.concept||p.challenges_solutions||'Projeto do portfólio Barra Studio Criativo.',
+    sections:{'Escopo':p.scope,'Conceito e características':p.concept,'Materiais e acabamentos':p.materials,'Programa de necessidades':p.needs_program,'Desafios / Soluções':p.challenges_solutions,'Equipe':p.team}
+  }
+}
 init();
 </script>
 </body></html>
