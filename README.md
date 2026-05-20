@@ -6,6 +6,7 @@ Arquivos principais:
 - `admin.html`: painel CMS para criar, editar, publicar, rascunhar e remover projetos.
 - `supabase-config.js`: configuração pública do Supabase usada no frontend.
 - `supabase/schema.sql`: tabela, bucket e políticas RLS.
+- `supabase/add-home-images-settings.sql`: migração para habilitar edição das imagens fixas da home.
 - `assets/`: imagens institucionais do site.
 
 ## Configuração do Supabase
@@ -55,6 +56,7 @@ O painel permite cadastrar:
 - status técnico do projeto, como concluído ou em execução;
 - destaque, ordem de exibição, escopo, conceito, materiais, programa, desafios e equipe;
 - imagem de capa/galeria, antes/depois e vídeos do YouTube.
+- imagens fixas da home, preservando o layout e trocando apenas os arquivos exibidos.
 
 ## Site público
 

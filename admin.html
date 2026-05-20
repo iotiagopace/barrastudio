@@ -42,6 +42,8 @@ img{display:block}
 .tb-r{display:flex;align-items:center;gap:8px}
 .btn-new{padding:8px 16px;border-radius:8px;border:none;background:var(--a);color:#fff;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;transition:opacity .15s}
 .btn-new:hover{opacity:.88}
+.btn-home{padding:7px 12px;border-radius:8px;border:1px solid var(--ln2);background:#fff;color:var(--ink);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;transition:all .15s}
+.btn-home:hover{border-color:var(--a);color:var(--a)}
 .btn-out{padding:7px 12px;border-radius:8px;border:1px solid var(--ln2);background:#fff;color:var(--sub);font-size:12px;cursor:pointer;transition:all .15s}
 .btn-out:hover{border-color:var(--a);color:var(--a)}
 /* TOOLBAR */
@@ -146,6 +148,14 @@ textarea.inp{resize:vertical;min-height:76px;line-height:1.6}
 .btn-save{flex:2;padding:11px;border-radius:var(--r);border:none;background:var(--a);color:#fff;font-size:14px;font-weight:600;cursor:pointer;transition:opacity .15s}
 .btn-save:hover{opacity:.88}
 .btn-save:disabled{opacity:.4;cursor:not-allowed}
+.home-img-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.home-img-card{border:1px solid var(--ln);border-radius:14px;background:#FAFAF7;overflow:hidden}
+.home-img-card img{width:100%;height:150px;object-fit:cover;background:#E8E8E0}
+.home-img-body{padding:12px;display:grid;gap:8px}
+.home-img-title{font-size:12px;font-weight:700;color:var(--ink)}
+.home-img-actions{display:flex;gap:8px}
+.home-img-actions button{flex:1;padding:8px 10px;border-radius:8px;border:1px solid var(--ln2);background:#fff;color:var(--sub);font-size:12px;font-weight:600;cursor:pointer}
+.home-img-actions button:hover{border-color:var(--a);color:var(--a)}
 /* DETAIL MODAL */
 #dm{background:#fff;border-radius:20px;width:100%;max-width:840px;margin:auto;overflow:hidden;flex-shrink:0}
 .dm-head{padding:20px 24px;display:flex;align-items:flex-start;gap:12px;border-bottom:1px solid var(--ln)}
@@ -200,6 +210,7 @@ textarea.inp{resize:vertical;min-height:76px;line-height:1.6}
   .dm-fields{max-height:none}
   .f2{grid-template-columns:1fr}
   .ba-row{grid-template-columns:1fr}
+  .home-img-grid{grid-template-columns:1fr}
   #toolbar{padding:12px 16px 0}
   #grid{padding:12px 16px 40px;gap:12px}
   #topbar{padding:0 16px}
@@ -249,6 +260,7 @@ textarea.inp{resize:vertical;min-height:76px;line-height:1.6}
       <div class="tb-count" id="tb-count">0 projetos</div>
     </div>
     <div class="tb-r">
+      <button class="btn-home" onclick="openHomeImages()">Imagens da home</button>
       <button class="btn-new" onclick="openForm(null)">+ Novo projeto</button>
       <button class="btn-out" onclick="logout()">Sair</button>
     </div>
@@ -289,6 +301,25 @@ textarea.inp{resize:vertical;min-height:76px;line-height:1.6}
   <div class="fm-foot">
     <button class="btn-cancel" onclick="closeFm()">Cancelar</button>
     <button class="btn-save" id="btn-save" onclick="saveWork()">Publicar projeto →</button>
+  </div>
+</div>
+</div>
+
+<!-- HOME IMAGES MODAL OVERLAY -->
+<div class="ov" id="home-ov" onclick="closeHomeImages()">
+<div id="fm" onclick="event.stopPropagation()">
+  <div class="fm-head">
+    <h2>Imagens da home</h2>
+    <button class="fm-close" onclick="closeHomeImages()">×</button>
+  </div>
+  <div class="fm-body">
+    <div class="sec-title">Trocar imagens sem alterar o layout</div>
+    <div class="home-img-grid" id="home-img-grid"></div>
+    <input type="file" id="home-img-inp" accept="image/*" style="display:none" onchange="onHomeImageChosen(this)"/>
+  </div>
+  <div class="fm-foot">
+    <button class="btn-cancel" onclick="closeHomeImages()">Cancelar</button>
+    <button class="btn-save" id="btn-home-save" onclick="saveHomeImages()">Salvar imagens →</button>
   </div>
 </div>
 </div>
@@ -363,6 +394,18 @@ const supabaseClient = (!SUPABASE_CFG.url || !SUPABASE_CFG.anonKey || SUPABASE_C
   ? null
   : window.supabase.createClient(SUPABASE_CFG.url, SUPABASE_CFG.anonKey);
 const IMAGE_BUCKET = SUPABASE_CFG.imageBucket || "project-images";
+const HOME_IMAGE_FIELDS=[
+  ["hero_main","Hero - imagem principal","assets/barra-page-02.jpg"],
+  ["hero_side","Hero - imagem lateral","assets/barra-page-07.jpg"],
+  ["about","Sobre","assets/barra-page-03.jpg"],
+  ["area_residential","Area residencial","assets/barra-page-12.jpg"],
+  ["area_commercial","Area comercial","assets/barra-page-18.jpg"],
+  ["area_restaurants","Area restaurantes","assets/barra-page-17.jpg"],
+  ["area_health","Area saude","assets/barra-page-08.jpg"],
+  ["team_rafaela","Equipe - Rafaela","assets/barra-page-09.jpg"],
+  ["team_thais","Equipe - Thais","assets/barra-page-10.jpg"],
+];
+const DEFAULT_HOME_IMAGES=Object.fromEntries(HOME_IMAGE_FIELDS.map(([key,,src])=>[key,src]));
 // ────────────────────────────────────────────────────────
 
 // ── SUPABASE DATA ────────────────────────────────────────
@@ -395,6 +438,22 @@ async function dbPut(w){
 async function dbDel(id){
   const {error}=await supabaseClient.from("projects").delete().eq("id",id);
   if(error)throw error;
+}
+async function dbGetHomeImages(){
+  const {data,error}=await supabaseClient.from("site_settings").select("value").eq("key","home_images").maybeSingle();
+  if(error)throw error;
+  return {...DEFAULT_HOME_IMAGES,...(data?.value||{})};
+}
+async function dbSaveHomeImages(images){
+  const uploaded={};
+  for(const [key] of HOME_IMAGE_FIELDS){
+    uploaded[key]=await uploadMaybeImage(images[key],`home/${key}`,"imagem");
+  }
+  const {error}=await supabaseClient
+    .from("site_settings")
+    .upsert({key:"home_images",value:uploaded},{onConflict:"key"});
+  if(error)throw error;
+  return uploaded;
 }
 function rowToWork(p){
   const gallery=Array.isArray(p.gallery_images)?p.gallery_images:[];
@@ -522,6 +581,7 @@ async function logout(){if(supabaseClient)await supabaseClient.auth.signOut();lo
 let works=[],curFilter="all",curEdit=null,curDetail=null;
 let fPhotos=[],fBefore=null,fAfter=null,fVideos=[];
 let dmCurIdx=0,dmShowBA=false,dmImages=[];
+let homeImages={...DEFAULT_HOME_IMAGES},homeImageKey=null;
 
 // ── BOOT ──────────────────────────────────────────────────
 async function bootApp(){
@@ -627,6 +687,67 @@ function hideDel(id){document.getElementById("db"+id).style.display="block";docu
 async function doDelete(id){
   await dbDel(id);works=works.filter(w=>w.id!==id);
   renderToolbar();renderGrid();toast("Projeto removido");
+}
+
+// ── HOME IMAGES ───────────────────────────────────────────
+async function openHomeImages(){
+  document.getElementById("home-ov").classList.add("on");
+  try{
+    homeImages=await dbGetHomeImages();
+  }catch(err){
+    console.error("[Barra CMS] Erro ao carregar imagens da home:",err);
+    toast(err.message||"Erro ao carregar imagens da home");
+  }
+  renderHomeImages();
+}
+function closeHomeImages(){document.getElementById("home-ov").classList.remove("on")}
+function renderHomeImages(){
+  const grid=document.getElementById("home-img-grid");
+  grid.innerHTML=HOME_IMAGE_FIELDS.map(([key,label,defaultSrc])=>{
+    const src=homeImages[key]||defaultSrc;
+    return `<div class="home-img-card">
+      <img src="${escH(src)}" alt="">
+      <div class="home-img-body">
+        <div class="home-img-title">${escH(label)}</div>
+        <div class="home-img-actions">
+          <button type="button" onclick="chooseHomeImage('${key}')">Trocar</button>
+          <button type="button" onclick="resetHomeImage('${key}')">Padrao</button>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+}
+function chooseHomeImage(key){
+  homeImageKey=key;
+  document.getElementById("home-img-inp").click();
+}
+function onHomeImageChosen(inp){
+  const file=inp.files&&inp.files[0];
+  if(!file||!homeImageKey)return;
+  compress(file,img=>{
+    homeImages[homeImageKey]=img;
+    renderHomeImages();
+  });
+  inp.value="";
+}
+function resetHomeImage(key){
+  homeImages[key]=DEFAULT_HOME_IMAGES[key];
+  renderHomeImages();
+}
+async function saveHomeImages(){
+  const btn=document.getElementById("btn-home-save");
+  btn.disabled=true;btn.textContent="Salvando...";
+  try{
+    homeImages=await dbSaveHomeImages(homeImages);
+    renderHomeImages();
+    toast("Imagens da home salvas!");
+    closeHomeImages();
+  }catch(err){
+    console.error("[Barra CMS] Erro ao salvar imagens da home:",err);
+    toast(err.message||"Erro ao salvar imagens da home");
+  }finally{
+    btn.disabled=false;btn.textContent="Salvar imagens →";
+  }
 }
 
 // ── FORM ──────────────────────────────────────────────────
@@ -991,7 +1112,7 @@ document.getElementById("dm-main-img").addEventListener("click",()=>{
 });
 function closeLb(){document.getElementById("lb").classList.remove("on")}
 document.addEventListener("keydown",e=>{
-  if(e.key==="Escape"){closeLb();closeDm();closeFm()}
+  if(e.key==="Escape"){closeLb();closeDm();closeFm();closeHomeImages()}
   if(e.key==="ArrowLeft")galleryNav(-1);
   if(e.key==="ArrowRight")galleryNav(1);
 });

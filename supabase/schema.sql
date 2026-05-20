@@ -51,6 +51,12 @@ create table if not exists public.projects (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.site_settings (
+  key text primary key,
+  value jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
 create index if not exists projects_public_idx
   on public.projects (status, is_featured desc, display_order asc, created_at desc);
 
@@ -69,8 +75,14 @@ create trigger projects_set_updated_at
 before update on public.projects
 for each row execute function public.set_updated_at();
 
+drop trigger if exists site_settings_set_updated_at on public.site_settings;
+create trigger site_settings_set_updated_at
+before update on public.site_settings
+for each row execute function public.set_updated_at();
+
 alter table public.projects enable row level security;
 alter table public.cms_admins enable row level security;
+alter table public.site_settings enable row level security;
 
 drop policy if exists "Public can read published projects" on public.projects;
 create policy "Public can read published projects"
@@ -100,6 +112,31 @@ using (public.is_cms_admin());
 drop policy if exists "Admins can read admin list" on public.cms_admins;
 create policy "Admins can read admin list"
 on public.cms_admins for select
+to authenticated
+using (public.is_cms_admin());
+
+drop policy if exists "Public can read public site settings" on public.site_settings;
+create policy "Public can read public site settings"
+on public.site_settings for select
+to anon, authenticated
+using (key = 'home_images' or public.is_cms_admin());
+
+drop policy if exists "Admins can insert site settings" on public.site_settings;
+create policy "Admins can insert site settings"
+on public.site_settings for insert
+to authenticated
+with check (public.is_cms_admin());
+
+drop policy if exists "Admins can update site settings" on public.site_settings;
+create policy "Admins can update site settings"
+on public.site_settings for update
+to authenticated
+using (public.is_cms_admin())
+with check (public.is_cms_admin());
+
+drop policy if exists "Admins can delete site settings" on public.site_settings;
+create policy "Admins can delete site settings"
+on public.site_settings for delete
 to authenticated
 using (public.is_cms_admin());
 
