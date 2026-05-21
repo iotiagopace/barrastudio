@@ -41,7 +41,7 @@
 <a class="float-wa" href="https://wa.me/5517997573824" target="_blank" aria-label="Fale pelo WhatsApp"><img src="assets/whatsapp.png" alt="WhatsApp"></a>
 <div class="modal" id="modal"><div class="modal-card"><button class="modal-close" onclick="closeModal()">×</button><div class="modal-grid"><div class="modal-media"><img class="modal-img" id="modalImg"><div class="modal-thumbs" id="modalThumbs"></div><div class="ba-modal" id="modalBA"></div></div><div class="modal-body"><div class="eyebrow" id="modalMeta"></div><h3 id="modalTitle"></h3><p id="modalDesc"></p><div class="project-tags" id="modalTags"></div><div class="project-info" id="modalInfo"></div><div id="modalSections"></div><div class="video-grid" id="modalVideos"></div><a class="btn dark" id="modalWa" href="https://wa.me/5517997573824" target="_blank">Conversar sobre projeto</a></div></div></div></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase-config.js"></script>
+<script src="/supabase-config.js"></script>
 <script>
 function easeOutCubic(t){return 1-Math.pow(1-t,3)}
 function smoothTo(target){const start=window.pageYOffset;const top=Math.max(0,target.getBoundingClientRect().top+start-86);const distance=top-start;const duration=760;let startTime=null;function step(ts){if(!startTime)startTime=ts;const p=Math.min((ts-startTime)/duration,1);window.scrollTo(0,start+distance*easeOutCubic(p));if(p<1)requestAnimationFrame(step)}requestAnimationFrame(step)}
@@ -60,16 +60,17 @@ window.addEventListener('resize',()=>{if(window.innerWidth>900)closeMobileMenu()
 const SEED_PROJECTS=[{"title": "Chácara AD.", "year": "2023", "category": "Residencial", "type": "Área de lazer", "cover": "assets/barra-page-12.jpg", "desc": "Projeto residencial com foco em convivência, lazer e integração entre áreas externas e internas."}, {"title": "Casa JG.", "year": "2024", "category": "Residencial", "type": "Casa e interiores", "cover": "assets/barra-page-13.jpg", "desc": "Projeto residencial com linguagem contemporânea, ambientes integrados e atenção aos detalhes de interiores."}, {"title": "Casa JG. — Interiores", "year": "2024", "category": "Residencial", "type": "Interiores", "cover": "assets/barra-page-14.jpg", "desc": "Desenvolvimento de interiores com acabamentos, marcenaria e soluções para conforto no cotidiano."}, {"title": "Apartamento JF.", "year": "2025", "category": "Comercial", "type": "Restaurante", "cover": "assets/barra-page-15.jpg", "desc": "Projeto de ambiente comercial voltado à experiência, circulação e identidade visual do espaço."}, {"title": "Apartamento JF.", "year": "2025", "category": "Residencial", "type": "Apartamento", "cover": "assets/barra-page-16.jpg", "desc": "Projeto de interiores para apartamento com aproveitamento inteligente do espaço e estética acolhedora."}, {"title": "Rancho do Pastel", "year": "2025", "category": "Restaurantes", "type": "Comercial gastronômico", "cover": "assets/barra-page-17.jpg", "desc": "Ambiente gastronômico com presença visual marcante, pensado para acolhimento, operação e experiência."}, {"title": "Samri Moda Fitness", "year": "2025", "category": "Comercial", "type": "Loja", "cover": "assets/barra-page-18.jpg", "desc": "Projeto comercial para varejo de moda fitness com identidade forte, exposição de produtos e circulação fluida."}];
 let allProjects=[],activeFilter='Todos';
 const DEFAULT_HOME_IMAGES={
-  hero_main:'assets/barra-page-02.jpg',
-  hero_side:'assets/barra-page-07.jpg',
-  about:'assets/barra-page-03.jpg',
-  area_residential:'assets/barra-page-12.jpg',
-  area_commercial:'assets/barra-page-18.jpg',
-  area_restaurants:'assets/barra-page-17.jpg',
-  area_health:'assets/barra-page-08.jpg',
-  team_rafaela:'assets/barra-page-09.jpg',
-  team_thais:'assets/barra-page-10.jpg'
+  hero_main:'/assets/barra-page-02.jpg',
+  hero_side:'/assets/barra-page-07.jpg',
+  about:'/assets/barra-page-03.jpg',
+  area_residential:'/assets/barra-page-12.jpg',
+  area_commercial:'/assets/barra-page-18.jpg',
+  area_restaurants:'/assets/barra-page-17.jpg',
+  area_health:'/assets/barra-page-08.jpg',
+  team_rafaela:'/assets/barra-page-09.jpg',
+  team_thais:'/assets/barra-page-10.jpg'
 };
+function assetUrl(src){return String(src||'').startsWith('assets/')?'/'+src:src}
 function enrichSeed(p){return {...p,photos:[p.cover],sections:{'Descrição do projeto':p.desc},videos:[]}}
 async function init(){
   const [cmsRows,homeImages]=await Promise.all([loadSupabaseProjects(),loadHomeImages()]);
@@ -131,13 +132,13 @@ async function loadHomeImages(){
 function applyHomeImages(images){
   document.querySelectorAll('[data-home-image]').forEach(img=>{
     const key=img.getAttribute('data-home-image');
-    if(images[key])img.src=images[key];
+    if(images[key])img.src=assetUrl(images[key]);
   });
 }
 function asArray(value){return Array.isArray(value)?value:[]}
 function normalizeSupabaseProject(p){
   const gallery=asArray(p.gallery_images).filter(Boolean);
-  const cover=p.cover_image_url||gallery[0]||'assets/barra-page-11.jpg';
+  const cover=p.cover_image_url||gallery[0]||'/assets/barra-page-11.jpg';
   const photos=gallery.length?gallery:[cover];
   return {
     source:'supabase',raw:p,id:p.id,title:p.title||'Projeto sem título',year:p.year||'',category:p.category||'Projeto',
